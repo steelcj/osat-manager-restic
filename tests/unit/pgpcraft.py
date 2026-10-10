@@ -102,6 +102,8 @@ class Spec:
     value: Optional[object] = None           # callable(s, n) -> new s
     left16: Optional[bytes] = None
     extra: List[bytes] = field(default_factory=list)
+    sig_alg: int = 1                         # the signature's algorithm byte
+    leading_zeros: int = 0                   # write the value as a padded MPI
 
 
 def signature_body(data: bytes, spec: Spec, prefix_material: bytes = b"",
@@ -111,9 +113,11 @@ def signature_body(data: bytes, spec: Spec, prefix_material: bytes = b"",
         created() + issuer_fpr(key)
     unhashed_sub = spec.unhashed if spec.unhashed is not None else issuer_id(key)
     kind = spec.sig_type if sig_type is None else sig_type
-    hashed = bytes([4, kind, 1, spec.hash_alg]) + \
+    hashed = bytes([4, kind, spec.sig_alg, spec.hash_alg]) + \
         len(hashed_sub).to_bytes(2, "big") + hashed_sub
     trailer = b"\x04\xff" + len(hashed).to_bytes(4, "big")
+    if kind == 0x01:                       # text: hashed with CRLF line ends
+        data = data.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
     digest = hashlib.new(HASH_NAMES[spec.hash_alg],
                          prefix_material + data + hashed + trailer).digest()
     k = (key.n.bit_length() + 7) // 8
@@ -123,8 +127,13 @@ def signature_body(data: bytes, spec: Spec, prefix_material: bytes = b"",
     s = pow(int.from_bytes(encoded, "big"), key.d, key.n)
     if spec.value:
         s = spec.value(s, key.n)
+    if spec.leading_zeros:
+        raw = b"\x00" * spec.leading_zeros + s.to_bytes((s.bit_length() + 7) // 8, "big")
+        value = (8 * len(raw)).to_bytes(2, "big") + raw
+    else:
+        value = mpi(s)
     return hashed + len(unhashed_sub).to_bytes(2, "big") + unhashed_sub + \
-        (spec.left16 if spec.left16 is not None else digest[:2]) + mpi(s)
+        (spec.left16 if spec.left16 is not None else digest[:2]) + value
 
 
 def armor(data: bytes, kind: str = "SIGNATURE") -> str:

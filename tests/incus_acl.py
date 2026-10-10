@@ -21,6 +21,19 @@ online even if the script dies:
 Only cuts this module made are touched: an override is removed only when
 its ACL carries the prefix, and nothing else on the host is changed.
 
+An offline step has a time limit, and the cut guards it twice: the
+dead-man's switch must be set to fire at least DEADMAN_MARGIN seconds
+after the limit, and systemd's own count of the time left must exceed
+the limit before the step starts. At the end of the step, before the
+cut is removed, reprove() requires the cut to be in place and every
+negative probe to still fail, so a switch that fired early fails the
+step instead of letting it pass with network.
+
+Every self-test run reports the IPv6 internet path as "verified",
+"blocked", or "not testable on this network: no IPv6 route on the
+host"; it never passes silently. Repeat the self-test on a network with
+IPv6 before marking Windows verified.
+
 What the self-test established on the development host, 2026-10-09:
 
 - The cut drops rather than rejects: Incus accepts reject, but denied
@@ -61,6 +74,8 @@ HOST_TCP_PORTS = (22, 53, 80, 443, 631, 3128, 3142, 8000, 8080)
 EXEMPT_HOST_PORTS = {53}
 CONTROL_PORT = 443        # open on the host before the cut; cut during it
 STEP_TIMEOUT = 120
+STEP_SECONDS = 300        # how long an offline step may take
+DEADMAN_MARGIN = 120      # the dead-man's switch fires at least this much later
 DEADMAN_SECONDS = 600
 SCRIPT = str(Path(__file__).resolve())
 
@@ -157,12 +172,24 @@ def recover(instance: str, nic: str = "eth0") -> list:
     return done
 
 
+def deadman_remaining(unit: str) -> float:
+    """Seconds until systemd fires the dead-man's switch, read from
+    systemd itself; 0 when the timer is not pending."""
+    out = systemctl("list-timers", "--all", "--output=json").stdout
+    for timer in json.loads(out or "[]"):
+        if timer.get("unit") == f"{unit}.timer" and timer.get("next"):
+            return timer["next"] / 1e6 - time.time()
+    return 0.0
+
+
 def arm_deadman(instance: str, nic: str, name: str, seconds: int) -> str:
     """A user systemd timer that undoes this cut after `seconds`,
     independent of this script."""
     unit = f"{name}-deadman"
     result = subprocess.run(
+        # systemd's default timer accuracy is a minute; fire when scheduled.
         ["systemd-run", "--user", f"--unit={unit}", f"--on-active={seconds}s",
+         "--timer-property=AccuracySec=1s",
          f"--description=OSAT offline step: undo {name}",
          sys.executable, SCRIPT, "undo", instance, "--nic", nic, "--acl", name],
         capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
@@ -172,11 +199,58 @@ def arm_deadman(instance: str, nic: str, name: str, seconds: int) -> str:
     return unit
 
 
+class Cut:
+    """An applied cut: its ACL, its dead-man's switch and the step's
+    time limit."""
+
+    def __init__(self, instance, nic, name, unit, host4, host6, step_seconds):
+        self.instance, self.nic, self.name, self.unit = instance, nic, name, unit
+        self.host4, self.host6 = host4, host6
+        self.step_seconds = step_seconds
+        self.started = time.monotonic()
+
+    def intact(self) -> list:
+        """What is wrong with the cut now, or an empty list."""
+        problems = []
+        device = instance_config(self.instance)["devices"].get(self.nic)
+        if not device or device.get("security.acls") != self.name:
+            problems.append("the NIC override is gone")
+        if self.name not in acl_names():
+            problems.append(f"the ACL {self.name} is gone")
+        if deadman_remaining(self.unit) <= 0:
+            problems.append("the dead-man's switch has fired or is not pending")
+        if time.monotonic() - self.started > self.step_seconds:
+            problems.append(f"the step took longer than its "
+                            f"{self.step_seconds} s limit")
+        return problems
+
+
+def reprove(cut: Cut, negative_probes) -> list:
+    """At the end of an offline step, before the cut is removed: the cut
+    must still be in place, and every negative probe must still fail.
+    negative_probes is a list of (label, callable returning the probe's
+    output). Returns the problems found; an empty list means re-proven."""
+    problems = cut.intact()
+    for label, probe in negative_probes:
+        outcome = probe()
+        if not outcome.startswith("FAILED"):
+            problems.append(f"{label} worked at the end of the step: {outcome}")
+    return problems
+
+
 @contextlib.contextmanager
-def offline(instance: str, nic: str = "eth0", deadman_seconds: int = DEADMAN_SECONDS):
+def offline(instance: str, nic: str = "eth0", deadman_seconds: int = DEADMAN_SECONDS,
+            step_seconds: int = STEP_SECONDS, deadman_margin: int = DEADMAN_MARGIN):
     """While inside, the instance exchanges only the host's SSH connection;
-    everything else is rejected in both directions. Yields (acl name,
-    host IPv4, host IPv6)."""
+    everything else is refused in both directions. Yields a Cut.
+
+    Refuses to start unless the dead-man's switch fires after the step's
+    time limit plus a margin, and checks systemd's own count of the time
+    left before the step begins."""
+    if deadman_seconds < step_seconds + deadman_margin:
+        raise RuntimeError(f"the dead-man's switch ({deadman_seconds} s) must "
+                           f"fire at least {deadman_margin} s after the "
+                           f"step's limit ({step_seconds} s)")
     recover(instance, nic)
     host4, host6 = bridge_addresses(nic_network(instance, nic))
     name = f"{PREFIX}{uuid.uuid4().hex[:12]}"
@@ -197,7 +271,12 @@ def offline(instance: str, nic: str = "eth0", deadman_seconds: int = DEADMAN_SEC
               f"security.acls={name}",
               "security.acls.default.ingress.action=reject",
               "security.acls.default.egress.action=reject")
-        yield name, host4, host6
+        left = deadman_remaining(unit)
+        if left <= step_seconds:
+            raise RuntimeError(f"only {left:.0f} s left on the dead-man's "
+                               f"switch, not more than the step's "
+                               f"{step_seconds} s")
+        yield Cut(instance, nic, name, unit, host4, host6, step_seconds)
     finally:
         undo_cut(instance, nic, name)
         if unit:
@@ -325,6 +404,24 @@ def ensure_sshd(instance: str) -> None:
 
 # ── Self-test ────────────────────────────────────────────────────────────────
 
+def host_has_ipv6_route() -> bool:
+    result = subprocess.run(["ip", "-6", "route", "show", "default"],
+                            capture_output=True, text=True, timeout=10)
+    return bool(result.stdout.strip())
+
+
+def ipv6_status(before: str, during: str, after: str) -> str:
+    """One of: verified; blocked; not testable on this network; or not
+    verified, when the cut failed to stop it. Reported on every run."""
+    if before.startswith("OK"):
+        if during.startswith("FAILED") and after.startswith("OK"):
+            return "verified"
+        return f"not verified: before OK, during {during}, after {after}"
+    if not host_has_ipv6_route():
+        return "not testable on this network: no IPv6 route on the host"
+    return f"blocked: the host has an IPv6 route, but the path fails before the cut ({before})"
+
+
 def paired_probes(host4, host6):
     """(label, code, args): each must succeed before the cut, fail during
     it, and succeed again after it."""
@@ -372,8 +469,12 @@ def selftest(instance: str, snapshot: str) -> int:
         record("before: the host's SSH answers", ssh_banner(address))
 
         monitor = SshMonitor(address)
-        with offline(instance) as (name, _, _):
+        with offline(instance) as cut:
             monitor.start()
+            record("before the step: the dead-man's switch fires after the "
+                   "step's limit", deadman_remaining(cut.unit) > cut.step_seconds,
+                   f"{deadman_remaining(cut.unit):.0f} s left, limit "
+                   f"{cut.step_seconds} s")
             time.sleep(2)
             during = {label: run_probe(instance, code, *args)
                       for label, code, args in probes}
@@ -383,10 +484,23 @@ def selftest(instance: str, snapshot: str) -> int:
                     instance, TCP_PROBE, host, p).startswith("OK")]
                 dns = run_probe(instance, DNS_PROBE, host)
                 notes.append(f"during the cut, DNS on the host {host}: {dns}")
+            negatives = [(label, (lambda c=code, a=args: run_probe(instance, c, *a)))
+                         for label, code, args in probes
+                         if baseline[label].startswith("OK")]
+            problems = reprove(cut, negatives)
+            record("at the end of the step: the cut is still in place and "
+                   "every negative probe still fails", not problems,
+                   "; ".join(problems))
             monitor.stopping.set()
             monitor.join()
         after = {label: run_probe(instance, code, *args)
                  for label, code, args in probes}
+        v6_label = "direct HTTPS over IPv6 to a public address, no proxy"
+        status = ipv6_status(baseline[v6_label], during[v6_label], after[v6_label])
+        print(f"IPV6  the IPv6 internet path: {status}", flush=True)
+        notes.append(f"the IPv6 internet path: {status}")
+        if status.startswith("not verified"):
+            record("the IPv6 internet path is cut", False, status)
 
         for label, _, _ in probes:
             before_ok = baseline[label].startswith("OK")
@@ -519,6 +633,37 @@ def killtest(instance: str, snapshot: str) -> int:
                str(deadman_units()))
         again = run_probe(instance, HTTPS_PROBE, RELEASE_URL)
         record("the instance is online again", again.startswith("OK"), again)
+
+        # A dead-man's switch that fires before the step ends is caught.
+        negative = [("direct HTTPS to restic's release URL",
+                     lambda: run_probe(instance, HTTPS_PROBE, RELEASE_URL))]
+        with offline(instance, deadman_seconds=30, step_seconds=10,
+                     deadman_margin=5) as cut:
+            record("an early-firing switch: the cut holds at first",
+                   not reprove(cut, negative))
+            time.sleep(50)                  # the step overruns; the switch fires
+            problems = reprove(cut, negative)
+            device = instance_config(instance)["devices"].get("eth0")
+            state = (f"override {'present' if device else 'gone'}, ACL "
+                     f"{'present' if cut.name in acl_names() else 'gone'}")
+            record("an early-firing switch: the end-of-step re-proof fails, "
+                   "with network back", bool(problems) and any(
+                       "worked at the end" in p for p in problems),
+                   f"{state}; " + "; ".join(problems))
+            record("an early-firing switch: the re-proof names the missing "
+                   "override and ACL", "the NIC override is gone" in problems
+                   and f"the ACL {cut.name} is gone" in problems, state)
+        record("and the cut is gone afterwards", not cut_in_place(instance))
+
+        # A switch too short for the step is refused before anything is cut.
+        try:
+            with offline(instance, deadman_seconds=100, step_seconds=300):
+                refused = False
+        except RuntimeError as exc:
+            refused = "must fire at least" in str(exc)
+        record("a dead-man's switch shorter than the step is refused before "
+               "any cut", refused and not cut_in_place(instance)
+               and not deadman_units())
     except Exception as exc:
         record("the kill test ran to the end", False, f"{type(exc).__name__}: {exc}")
     finally:

@@ -8,12 +8,15 @@ one pinned key (RFC 4880, RFC 9580 where they differ):
   base64 and, when present, a correct checksum;
 - every packet, subpacket and MPI is read with bounds checks, MPIs must
   be canonical, and nothing may follow the signature's value;
-- the signature is version 4, of a document (type 0x00 or 0x01), made
+- the armor is at most 64 KiB, checked before anything is decoded;
+- the signature is version 4, a binary document signature (type 0x00,
+  which is what restic makes), made
   with RSA and the key's own algorithm, over SHA-256, SHA-384 or SHA-512
   only;
 - its hashed area names the pinned fingerprint as issuer, every issuer
   it names anywhere is the pinned key, no critical subpacket is unknown,
-  and it has not expired; its unhashed area, which nothing signs, may
+  and it has not expired; creation and expiration times appear at most
+  once; its unhashed area, which nothing signs, may
   hold only issuer subpackets naming the pinned key;
 - the 16-bit hash prefix matches, the signature value lies in [1, n-1],
   and the PKCS#1 v1.5 encoding is compared byte for byte with the one
@@ -48,6 +51,7 @@ SUB_CREATED, SUB_EXPIRES, SUB_ISSUER, SUB_ISSUER_FPR = 2, 3, 16, 33
 # Subpackets understood well enough that a critical one may be accepted.
 KNOWN_SUBPACKETS = {SUB_CREATED, SUB_EXPIRES, SUB_ISSUER, SUB_ISSUER_FPR}
 MIN_RSA_BITS = 2048
+MAX_ARMOR = 64 * 1024     # a genuine restic signature is under 1 KiB
 MIN_PADDING = 8
 CLOCK_SKEW = 24 * 3600
 
@@ -72,6 +76,8 @@ def dearmor(text: str, kind: str) -> bytes:
     kind, such as SIGNATURE, with strict base64 and checksum."""
     if not isinstance(text, str):
         raise SignatureError("armored input must be text")
+    if len(text) > MAX_ARMOR:
+        raise SignatureError(f"armored input is larger than {MAX_ARMOR} bytes")
     if not text.isascii():
         raise SignatureError("armored input is not ASCII")
     lines = [ln.strip() for ln in text.strip().splitlines()]
@@ -125,6 +131,9 @@ class Reader:
         return self.pos == len(self.data)
 
     def mpi(self) -> int:
+        # Canonical MPIs only: no leading zero bits. gpg accepts more, but
+        # every restic signature so far is canonical; a signer writing
+        # fixed-width MPIs would be refused here, which fails closed.
         bits = self.number(2)
         value = int.from_bytes(self.take((bits + 7) // 8), "big")
         if value.bit_length() != bits or value == 0:
@@ -262,10 +271,14 @@ def check_subpackets(sig: Signature, fingerprint: str, now: float) -> None:
         if kind == SUB_ISSUER_FPR:
             hashed_fprs.append(body)
         elif kind == SUB_CREATED:
+            if created is not None:
+                raise SignatureError("more than one creation time")
             if len(body) != 4:
                 raise SignatureError("malformed creation time")
             created = int.from_bytes(body, "big")
         elif kind == SUB_EXPIRES:
+            if expires is not None:
+                raise SignatureError("more than one expiration time")
             if len(body) != 4:
                 raise SignatureError("malformed expiration time")
             expires = int.from_bytes(body, "big")
@@ -304,7 +317,7 @@ def verify(data: bytes, signature_armored: str, key_armored: str,
                        time.time() if now is None else now)
     except SignatureError:
         raise
-    except (IndexError, ValueError, TypeError, OverflowError,
+    except (IndexError, ValueError, TypeError, OverflowError, AttributeError,
             binascii.Error, UnicodeError) as exc:
         # Every read is bounds-checked; this is the last line of defence.
         raise SignatureError(f"malformed input: {exc}") from None
@@ -313,6 +326,8 @@ def verify(data: bytes, signature_armored: str, key_armored: str,
 def _verify(data, signature_armored, key_armored, fingerprint, now):
     if not isinstance(data, bytes):
         raise SignatureError("the signed data must be bytes")
+    if not isinstance(fingerprint, str):
+        raise SignatureError("the pinned fingerprint must be text")
     fingerprint = fingerprint.replace(" ", "").upper()
     if len(fingerprint) != 40:
         raise SignatureError("the pinned fingerprint is not 40 hex digits")
@@ -329,12 +344,10 @@ def _verify(data, signature_armored, key_armored, fingerprint, now):
     if sig.hash_algorithm not in HASHES:
         raise SignatureError(f"hash algorithm {sig.hash_algorithm} is not "
                              f"accepted; SHA-256 or stronger only")
-    if sig.sig_type not in (0x00, 0x01):
+    if sig.sig_type != 0x00:
         raise SignatureError(f"signature type {sig.sig_type:#x} is not a "
-                             f"document signature")
+                             f"binary document signature")
     check_subpackets(sig, fingerprint, now)
-    if sig.sig_type == 0x01:
-        data = data.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
     name, prefix = HASHES[sig.hash_algorithm]
     trailer = b"\x04\xff" + len(sig.hashed).to_bytes(4, "big")
     digest = hashlib.new(name, data + sig.hashed + trailer).digest()

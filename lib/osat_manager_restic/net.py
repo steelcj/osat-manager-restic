@@ -12,6 +12,7 @@ from .errors import ManagerError
 
 USER_AGENT = "manage-restic (osat-manager-restic)"
 ATTEMPTS = 3
+MAX_BYTES = 256 * 1024 * 1024   # no download may be larger than this
 
 
 class NotPublished(ManagerError):
@@ -25,12 +26,16 @@ class Network:
     def __init__(self, timeout: float = 60.0):
         self.timeout = timeout
 
-    def fetch(self, url: str) -> bytes:
+    def fetch(self, url: str, max_bytes: int = MAX_BYTES) -> bytes:
         request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
         for attempt in range(1, ATTEMPTS + 1):
             try:
                 with urllib.request.urlopen(request, timeout=self.timeout) as r:
-                    return r.read()
+                    data = r.read(max_bytes + 1)
+                if len(data) > max_bytes:
+                    raise ManagerError(f"download larger than {max_bytes} "
+                                       f"bytes refused: {url}")
+                return data
             except urllib.error.HTTPError as exc:
                 if exc.code == 404:
                     raise NotPublished(f"not published upstream: {url}") from None

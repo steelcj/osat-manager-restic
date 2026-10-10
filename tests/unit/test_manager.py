@@ -88,6 +88,68 @@ class Archive(Sandbox):
         self.assertIn("0.18.1", self.manager.installed())
         self.assertTrue(any("re-checked" in m for m in self.messages))
 
+    def restore_with_no_network(self, resolver_error):
+        """Restore from the archive with the real network class, while
+        name resolution and connections are patched to record each call
+        and raise. Returns the recorded calls."""
+        import socket
+        from unittest import mock
+        from osat_manager_restic.net import Network
+        self.manager.install("0.18.1")
+        self.manager.install("0.19.1")
+        self.manager.remove("0.18.1")
+        calls = []
+
+        def getaddrinfo(*args, **kwargs):
+            calls.append(("getaddrinfo", args))
+            raise resolver_error
+
+        def create_connection(*args, **kwargs):
+            calls.append(("create_connection", args))
+            raise OSError("no network in this test")
+
+        real_network = self.make_manager()
+        real_network.net = Network(timeout=2)
+        # restic's real HTTPS URLs, so any attempt would reach the sockets.
+        real_network.manifest["sources"] = \
+            load_manifest(REPO / "manager.yaml")["sources"]
+        with mock.patch.object(socket, "getaddrinfo", getaddrinfo), \
+                mock.patch.object(socket, "create_connection", create_connection):
+            real_network.install("0.18.1")
+        self.assertIn("0.18.1", real_network.installed())
+        return calls
+
+    def test_an_offline_restore_makes_no_network_attempt(self):
+        calls = self.restore_with_no_network(OSError("refused in this test"))
+        self.assertEqual(calls, [], "the restore tried the network")
+
+    def test_an_offline_restore_works_when_names_do_not_resolve(self):
+        import socket
+        calls = self.restore_with_no_network(
+            socket.gaierror(socket.EAI_NONAME, "Name or service not known"))
+        self.assertEqual(calls, [], "the restore tried the network")
+
+    def test_the_patches_do_catch_a_network_attempt(self):
+        """The control: with nothing archived, the same patches see the
+        download attempt, so the two tests above can fail."""
+        import socket
+        from unittest import mock
+        from osat_manager_restic.net import Network
+        calls = []
+
+        def getaddrinfo(*args, **kwargs):
+            calls.append(("getaddrinfo", args))
+            raise socket.gaierror(socket.EAI_NONAME, "Name or service not known")
+
+        manager = self.make_manager()
+        manager.net = Network(timeout=2)
+        manager.manifest["sources"] = load_manifest(REPO / "manager.yaml")["sources"]
+        with mock.patch.object(socket, "getaddrinfo", getaddrinfo), \
+                mock.patch("osat_manager_restic.net.time.sleep"):
+            with self.assertRaises(ManagerError):
+                manager.install("0.18.1")
+        self.assertTrue(calls, "a download attempt went unnoticed")
+
     def test_a_tampered_archive_is_refused(self):
         from osat_manager_restic.platforms import unprotect
         self.manager.install("0.18.1")

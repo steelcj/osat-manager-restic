@@ -53,7 +53,7 @@ class FakeNetwork:
         self.online = True
         self.tamper = None
 
-    def fetch(self, url: str) -> bytes:
+    def fetch(self, url: str, max_bytes: int = 0) -> bytes:
         self.requests.append(url)
         if not self.online:
             raise ManagerError(f"network is off: {url}")

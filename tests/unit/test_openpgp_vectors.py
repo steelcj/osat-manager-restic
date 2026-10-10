@@ -56,7 +56,10 @@ POLICY = {
              "reduces it modulo n",
     "time": "a signature dated in the future is refused; gpg warns and verifies",
     "strict": "a signature block holds one canonically encoded signature packet "
-              "and nothing else, in PGP SIGNATURE armor; gpg is lenient",
+              "and nothing else, in PGP SIGNATURE armor, with each time "
+              "subpacket at most once; gpg is lenient",
+    "binary": "only binary document signatures, type 0x00, which restic makes; "
+              "gpg also accepts text signatures, type 0x01",
 }
 
 
@@ -154,6 +157,25 @@ def vectors():
         Vector("unknown subpacket in the unhashed area",
                sign(DATA, Spec(KEY, unhashed=issuer_id(KEY) + sub(66, b"x"))),
                "unhashed area", True, policy="unhashed"),
+        Vector("text signature, type 0x01", sign(DATA, Spec(KEY, sig_type=1)),
+               "binary document", True, policy="binary"),
+        Vector("duplicate creation times",
+               sign(DATA, Spec(KEY, hashed=created() + created(CREATED - 60) + issuer_fpr(KEY))),
+               "more than one creation time", True, policy="strict"),
+        Vector("critical issuer fingerprint",
+               sign(DATA, Spec(KEY, hashed=created() + sub(33, b"\x04" + KEY.fpr_bytes, critical=True))),
+               "accept", True),
+        Vector("hashed issuer key ID without a fingerprint",
+               sign(DATA, Spec(KEY, hashed=created() + issuer_id(KEY), unhashed=b"")),
+               "hashed area", True, policy="issuer"),
+        Vector("expiration of zero, meaning never",
+               sign(DATA, Spec(KEY, hashed=HASHED + sub(3, (0).to_bytes(4, "big")))),
+               "accept", True),
+        Vector("signature algorithm 3 against an algorithm 1 key",
+               sign(DATA, Spec(KEY, sig_alg=3)), "algorithm", True, policy="strict"),
+        Vector("signature value with a leading zero byte",
+               sign(DATA, Spec(KEY, leading_zeros=1)), "non-canonical", True,
+               policy="strict"),
         # Property 3: hashes
         Vector("MD5", sign(DATA, Spec(KEY, hash_alg=1)), "not accepted", False),
         Vector("SHA-1", sign(DATA, Spec(KEY, hash_alg=2)), "not accepted", True,
@@ -192,6 +214,7 @@ def vectors():
         ("partial length", armor(b"\xc2\xe0" + GOOD)),
         ("version byte only", armor(packet(2, b"\x04"))),
         ("version 3", armor(packet(2, b"\x03" + GOOD[1:]))),
+        ("version 5", armor(packet(2, b"\x05" + GOOD[1:]))),
         ("length runs past the end", armor(packet(2, GOOD)[:-5])),
         ("valid, then a stray header", armor(packet(2, GOOD) + b"\xc2")),
         ("valid, then a marker packet", armor(packet(2, GOOD) + packet(10, b"PGP"))),
@@ -298,6 +321,22 @@ class ConfirmedByGpg(unittest.TestCase):
 
 class FailsClosed(unittest.TestCase):
     """Property 5, exhaustively: truncations and byte mutations."""
+
+    def test_a_fingerprint_that_is_not_text_fails_closed(self):
+        good = sign(DATA, Spec(KEY))
+        for fingerprint in (None, 123, KEY.fpr_bytes):
+            with self.subTest(fingerprint=fingerprint):
+                with self.assertRaises(SignatureError):
+                    verify(DATA, good, BLOCK, fingerprint, now=NOW)
+
+    def test_oversized_armor_is_refused_before_decoding(self):
+        import time as clock
+        huge = armor(packet(2, b"\x04" + b"\x00" * (4 * 1024 * 1024)))
+        start = clock.monotonic()
+        with self.assertRaises(SignatureError) as caught:
+            verify(DATA, huge, BLOCK, KEY.fingerprint, now=NOW)
+        self.assertIn("larger than", str(caught.exception))
+        self.assertLess(clock.monotonic() - start, 0.5)
 
     def check(self, signature):
         return verify(DATA, signature, BLOCK, KEY.fingerprint, now=NOW)
