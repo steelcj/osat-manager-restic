@@ -154,7 +154,11 @@ class Manager:
         archive = self.paths.archive / version
         if (archive / name).is_file():
             sums = (archive / sums_name).read_bytes()
-            sig = (archive / sig_name).read_text(encoding="utf-8")
+            try:
+                sig = (archive / sig_name).read_bytes().decode("ascii")
+            except UnicodeDecodeError:
+                raise ManagerError(f"the archived {sig_name} for {version} "
+                                   f"is not an ASCII-armored signature") from None
             asset = (archive / name).read_bytes()
             sha = self.verify_files(sums, sig, name, asset)
             self.log(f"[manage-restic] restoring {name} from the verified "
@@ -166,7 +170,11 @@ class Manager:
         except NotPublished:
             raise ManagerError(f"restic {version} was never published "
                                f"(no {sums_name} for v{version})") from None
-        sig = self.net.fetch(self.url(version, sig_name)).decode("utf-8")
+        try:
+            sig = self.net.fetch(self.url(version, sig_name)).decode("ascii")
+        except UnicodeDecodeError:
+            raise ManagerError(f"{sig_name} for v{version} is not an "
+                               f"ASCII-armored signature") from None
         try:
             asset = self.net.fetch(self.url(version, name))
         except NotPublished:

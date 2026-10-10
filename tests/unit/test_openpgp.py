@@ -39,7 +39,7 @@ class RealSignature(unittest.TestCase):
             verify(changed, SIG, KEY["public_key"], KEY["fingerprint"])
 
     def test_a_changed_signature_value_is_refused(self):
-        data = bytearray(dearmor(SIG))
+        data = bytearray(dearmor(SIG, "SIGNATURE"))
         data[-1] ^= 0x01                      # last byte of the RSA value
         with self.assertRaises(SignatureError):
             verify(SUMS, rearmor(bytes(data)), KEY["public_key"],

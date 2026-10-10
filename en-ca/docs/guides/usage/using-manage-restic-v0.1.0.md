@@ -70,6 +70,21 @@ Every verified download is kept in the archive with the checksum file and signat
 
 Installed versions are read-only. Writing to or deleting an installed binary fails; only the manager's `--remove` and `--uninstall` take them away.
 
+## The pinned key
+
+`manager.yaml` pins restic's signing key by fingerprint, `CF8F 18F2 8445 7597 3F79 D4E1 91A6 868B D3F7 A907`, Alexander Neumann's RSA key, with the key itself. A signature from any other key is refused, even if the key is otherwise valid.
+
+If restic starts signing with another key, or announces that the key has changed, installing new versions fails until `manager.yaml` is changed. The manager never fetches or trusts a new key by itself. The change is a reviewed commit to `manager.yaml`:
+
+1. Read the announcement in restic's own channels, and the new fingerprint in restic's installation documentation.
+2. Fetch the new key from the address restic names, and confirm its fingerprint matches the documented one.
+3. Confirm that the new key verifies the newest release's `SHA256SUMS.asc`.
+4. Pin the key that actually signs. If restic signs with a subkey, pin that subkey's own fingerprint.
+5. Replace `public_key` and `fingerprint` in `manager.yaml`. In the commit message, name where the fingerprint was confirmed.
+6. Have the change reviewed, then release a new version of the manager.
+
+Versions already in the verified archive were checked with the key in force when they were downloaded. An offline restore re-checks them against the key now pinned, so after a rotation, keep the old key's releases restorable by restoring them before the change, or by keeping a manager release that still pins the old key.
+
 ## What it leaves alone
 
 restic's own configuration, cache, repositories and password files. Do not run `restic self-update` on a managed binary; install the new version with the manager instead.

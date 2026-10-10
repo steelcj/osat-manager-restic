@@ -31,7 +31,14 @@ PROJECT = "osat-manager-restic"
 MANIFEST = "manager.yaml"
 
 KEY_LINE = re.compile(r"^(?P<key>\"[^\"]*\"|'[^']*'|[A-Za-z0-9_.-]+):(?:\s+(?P<rest>.*))?$")
-INTEGER = re.compile(r"^-?[0-9]+$")
+INTEGER = re.compile(r"^-?(0|[1-9][0-9]*)$")
+# A plain (unquoted) string must be one YAML cannot read as anything else:
+# it starts with a letter and holds only letters, digits and . _ / -.
+# Everything else, such as URLs, paths with spaces or text with colons,
+# is quoted in manager.yaml.
+PLAIN = re.compile(r"^[A-Za-z][A-Za-z0-9._/-]*$")
+# Words YAML 1.1 reads as booleans or null, in any case.
+YAML_WORDS = {"y", "yes", "n", "no", "on", "off", "true", "false", "null"}
 REFUSED = ("&", "*", "!", "{", ">", "? ", "%")
 
 
@@ -57,25 +64,45 @@ def _strip_comment(text: str) -> str:
 def _scalar(token: str, number: int):
     token = token.strip()
     if token.startswith('"'):
-        if not token.endswith('"') or len(token) < 2:
-            raise ManagerError(f"line {number}: unterminated string")
-        body = token[1:-1]
-        out, i = [], 0
-        while i < len(body):
-            if body[i] == "\\" and i + 1 < len(body):
-                nxt = body[i + 1]
-                out.append({"n": "\n", "t": "\t", "\\": "\\", '"': '"'}.get(nxt))
-                if out[-1] is None:
-                    raise ManagerError(f"line {number}: unsupported escape \\{nxt}")
+        out, i = [], 1
+        while True:
+            if i >= len(token):
+                raise ManagerError(f"line {number}: unterminated string")
+            ch = token[i]
+            if ch == '"':
+                break
+            if ch == "\\":
+                nxt = token[i + 1] if i + 1 < len(token) else ""
+                escaped = {"n": "\n", "t": "\t", "\\": "\\", '"': '"'}.get(nxt)
+                if escaped is None:
+                    raise ManagerError(f"line {number}: unsupported escape "
+                                       f"\\{nxt}")
+                out.append(escaped)
                 i += 2
-            else:
-                out.append(body[i])
-                i += 1
+                continue
+            out.append(ch)
+            i += 1
+        if token[i + 1:].strip():
+            raise ManagerError(f"line {number}: unexpected text after a "
+                               f"quoted string")
         return "".join(out)
     if token.startswith("'"):
-        if not token.endswith("'") or len(token) < 2:
-            raise ManagerError(f"line {number}: unterminated string")
-        return token[1:-1].replace("''", "'")
+        out, i = [], 1
+        while True:
+            if i >= len(token):
+                raise ManagerError(f"line {number}: unterminated string")
+            if token[i] == "'":
+                if token[i + 1: i + 2] == "'":
+                    out.append("'")
+                    i += 2
+                    continue
+                break
+            out.append(token[i])
+            i += 1
+        if token[i + 1:].strip():
+            raise ManagerError(f"line {number}: unexpected text after a "
+                               f"quoted string")
+        return "".join(out)
     if token.startswith(REFUSED) or token.startswith("|"):
         raise ManagerError(f"line {number}: {token[:1]!r} is outside the "
                            f"YAML subset manager.yaml may use")
@@ -83,22 +110,27 @@ def _scalar(token: str, number: int):
         if not token.endswith("]"):
             raise ManagerError(f"line {number}: unterminated flow sequence")
         inner = token[1:-1].strip()
+        if any(c in inner for c in "[]{}\"'"):
+            raise ManagerError(f"line {number}: a flow sequence may hold "
+                               f"only plain scalars")
         return [_scalar(t, number) for t in inner.split(",")] if inner else []
     if token in ("true", "false"):
         return token == "true"
-    if token in ("null", "~", ""):
+    if token in ("null", ""):
         return None
     if INTEGER.match(token):
         return int(token)
-    return token
+    if PLAIN.match(token) and token.lower() not in YAML_WORDS:
+        return token
+    raise ManagerError(f"line {number}: {token!r} must be quoted; YAML could "
+                       f"read it as something other than a plain string")
 
 
 def _lines(text: str) -> List[_Line]:
     out = []
     for number, raw in enumerate(text.splitlines(), start=1):
-        if "\t" in raw[: len(raw) - len(raw.lstrip())]:
-            raise ManagerError(f"line {number}: tabs are not allowed for "
-                               f"indentation")
+        if "\t" in raw:
+            raise ManagerError(f"line {number}: tabs are not allowed")
         if raw.strip() in ("---", "..."):
             raise ManagerError(f"line {number}: one document only")
         out.append(_Line(number, len(raw) - len(raw.lstrip(" ")), raw))
@@ -142,7 +174,7 @@ def _sequence(lines, index, indent):
             raise ManagerError(f"line {line.number}: expected a sequence "
                                f"item at indent {indent}")
         item = text[2:]
-        if KEY_LINE.match(item):
+        if item.lstrip().startswith("-") or KEY_LINE.match(item):
             raise ManagerError(f"line {line.number}: sequences of mappings "
                                f"are outside the subset")
         items.append(_scalar(item, line.number))
@@ -176,9 +208,11 @@ def _mapping(lines, index, indent):
 
 
 def _literal(lines, index, parent_indent):
-    """A | block: kept lines, each newline-terminated, the trailing blank
-    lines clipped to one newline."""
-    block: List[str] = []
+    """A | block, clipped: kept lines, each newline-terminated, trailing
+    empty lines reduced to the final newline. Indentation is that of the
+    first line with content; a whitespace-only line keeps any spaces
+    beyond it, as YAML does."""
+    raw_lines: List[str] = []
     indent: Optional[int] = None
     while index < len(lines):
         line = lines[index]
@@ -187,15 +221,24 @@ def _literal(lines, index, parent_indent):
                 break
             if indent is None:
                 indent = line.indent
-            if line.indent < indent:
-                break
-            block.append(line.text[indent:])
-        else:
-            block.append("")
+                for blank in raw_lines:
+                    if len(blank) > indent:
+                        raise ManagerError(f"line {line.number}: a blank line "
+                                           f"before a literal block's text is "
+                                           f"indented beyond it")
+            elif line.indent < indent:
+                raise ManagerError(f"line {line.number}: literal block line "
+                                   f"indented less than its first line")
+        raw_lines.append(line.text)
         index += 1
-    while block and block[-1] == "":
-        block.pop()
-    return ("\n".join(block) + "\n") if block else "", index
+    # Trailing whitespace-only lines belong to what follows, not the block.
+    while raw_lines and not raw_lines[-1].strip():
+        raw_lines.pop()
+        index -= 1
+    if indent is None:
+        return "", index
+    block = [raw[indent:] if len(raw) > indent else "" for raw in raw_lines]
+    return "\n".join(block) + "\n", index
 
 
 # ── Finding manager.yaml ────────────────────────────────────────────────────

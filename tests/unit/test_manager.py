@@ -162,6 +162,19 @@ class SelfInstallAndUninstall(Sandbox):
         self.assertEqual([p.name for p in self.paths.bin_dir.iterdir()],
                          ["someone-elses-tool"])
 
+    def test_a_created_directory_holding_anything_else_is_kept(self):
+        self.manager.install("0.19.1")
+        (self.paths.bin_dir / "someone-elses-tool").write_text("x\n")
+        self.manager.uninstall()
+        self.assertTrue((self.paths.bin_dir / "someone-elses-tool").is_file())
+        self.assertFalse(self.paths.root.exists())
+
+    def test_a_directory_that_existed_before_is_kept_even_if_empty(self):
+        self.paths.bin_dir.mkdir(parents=True)
+        self.manager.install("0.19.1")
+        self.manager.uninstall()
+        self.assertTrue(self.paths.bin_dir.is_dir())
+
     def test_directories_the_manager_created_are_removed_when_empty(self):
         self.manager.install("0.19.1")
         self.manager.uninstall()
