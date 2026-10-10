@@ -1,3 +1,16 @@
+# osat-manager-restic
+
+`manage-restic` installs restic into a user's own account and manages its versions. It is the pilot OSAT manager.
+
+## Working here
+
+- Standard library only, `pathlib` throughout, no shell commands in the manager. Tests may use more.
+- Platform differences live in `lib/osat_manager_restic/platforms.py` and nowhere else.
+- Never weaken verification: a download is unpacked only after the signature and checksum both pass.
+- Run `python3 -m unittest discover -s tests/unit` and `uc-automa check` before committing.
+- A platform is verified only by running `tests/e2e_scenario.py` on it; never claim one that has not been run.
+- Ask before pushing, tagging, or using the Windows virtual machine.
+
 <!-- uc-portage:begin uc-automa-signpost -->
 ## uc-automa
 

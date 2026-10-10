@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "osat-manager-restic"
+dynamic = ["version"]
+description = "manage-restic: user-space installations of restic, side by side, verified against restic's signed checksums and kept for offline restore."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Christopher Steel" }]
+dependencies = []
+
+[project.scripts]
+manage-restic = "osat_manager_restic.cli:main"
+
+[tool.setuptools]
+# manager.yaml lives once, at the repository root; this mapping carries it
+# in every install (uc-automa 0019).
+packages = ["osat_manager_restic", "osat_manager_restic.data"]
+
+[tool.setuptools.package-dir]
+"" = "lib"
+"osat_manager_restic.data" = "."
+
+[tool.setuptools.package-data]
+"osat_manager_restic.data" = ["manager.yaml"]
+
+[tool.setuptools.dynamic]
+# VERSION is the single source of the version.
+version = { file = "VERSION" }

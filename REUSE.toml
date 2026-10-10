@@ -1,11 +1,16 @@
 version = 1
 
 [[annotations]]
-path = ["lib/**", "tests/**", "schemas/**", "conf/**", "pyproject.toml", "VERSION", "manager.yaml", ".uc-automa.yaml", ".uc-portage-state.yaml", ".*.assets/**", ".gitattributes", ".editorconfig", ".gitignore", ".pre-commit-config.yaml"]
+path = ["lib/**", "tests/**", "pyproject.toml", "VERSION", "manager.yaml", ".uc-automa.yaml", ".uc-portage-state.yaml", ".osat-manager-restic.assets/**", ".gitattributes", ".editorconfig", ".gitignore"]
 SPDX-FileCopyrightText = "Christopher Steel"
 SPDX-License-Identifier = "GPL-3.0-or-later"
 
 [[annotations]]
-path = ["en-ca/**", "README.md", "CHANGELOG.md", "ROADMAP.md", "CONTRIBUTING.md", "CLAUDE.md"]
+path = ["en-ca/**", "tests/e2e/linux/*.md", "README.md", "CHANGELOG.md", "ROADMAP.md", "CONTRIBUTING.md", "CLAUDE.md"]
 SPDX-FileCopyrightText = "Christopher Steel"
 SPDX-License-Identifier = "CC-BY-SA-4.0"
+
+[[annotations]]
+path = ["tests/unit/data/restic-release-signature.zip"]
+SPDX-FileCopyrightText = "The restic authors"
+SPDX-License-Identifier = "BSD-2-Clause"
