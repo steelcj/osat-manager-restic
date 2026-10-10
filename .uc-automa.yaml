@@ -1,0 +1,14 @@
+format: 1
+repository: osat-manager-restic
+layout: osat-manager
+automa_version: 0.1.0
+language: en-ca
+subscribe:
+- license-gpl-3-0-or-later
+- license-cc-by-sa-4-0
+- reuse
+- changelog
+- version-file
+- claude-signpost
+- line-endings
+- editorconfig
