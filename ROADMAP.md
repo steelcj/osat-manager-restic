@@ -2,6 +2,16 @@
 
 Forward plan only; completed items move to [CHANGELOG.md](CHANGELOG.md).
 
+## 0.1.1
+
+Findings of the third independent review of the OpenPGP verifier, none a violation of its five properties:
+
+- Detect a download shorter than its `Content-Length` and retry it, rather than reporting it as a checksum mismatch.
+- Refuse a `now` that is not a finite number in `verify`, so a caller cannot switch off the time checks.
+- Refuse a critical bit on subpackets in the unhashed area, which nothing signs.
+- Test that the manager applies the 1 MiB cap to `SHA256SUMS` and its signature, not only that the constant is small.
+- Put an overall time limit on each download, as well as the per-read timeout.
+
 ## Next release
 
 - Verify end to end on Windows, once the Windows 11 virtual machine can be reached, and on Linux arm64.
