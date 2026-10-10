@@ -4,6 +4,8 @@ All notable changes are recorded here, in the form of [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-10
+
 ### Added
 
 - `manage-restic`, meeting the OSAT manager contract: user-space install, versions side by side, switching, a generic `restic` alias beside one per minor line, renamable aliases, read-only installed versions, a verified archive for offline restore, self-install and uninstall.
