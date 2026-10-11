@@ -15,6 +15,7 @@ All notable changes are recorded here, in the form of [Keep a Changelog](https:/
 
 ### Added
 
+- The end-to-end scenario passed on Windows 11, amd64, on 2026-10-11; Windows is not yet marked verified, pending the network cut's self-test on a network with IPv6.
 - `tests/e2e/windows/run_over_ssh.py`, which runs the unit tests of uc-portage, uc-automa and this repository, the network cut's self-test and the end-to-end scenario in a Windows virtual machine reached over SSH, each from a clean snapshot, and installs uc-portage and uc-automa there with `pip install --no-index`, inside a network cut, from wheels built from their release tags and PyYAML's pure `py3-none-any` wheel.
 - The network cut's self-test reaches its instance through a guest, so the same test runs in a Linux container with `incus exec` and in a Windows virtual machine over SSH.
 

@@ -26,10 +26,10 @@ Every download is verified before it is unpacked: the signature on restic's `SHA
 
 | Platform | Status |
 | --- | --- |
-| Linux, amd64 | Verified: the full end-to-end scenario passed on 2026-10-09, in an Incus container (Linux Mint 22.3, Python 3.10) restored to a clean snapshot, including the offline restore from the verified archive. [Record](tests/e2e/linux/2026-10-09--linux-scenario-run.md) |
+| Linux, amd64 | Verified: the full end-to-end scenario passed on 2026-10-09, in an Incus container (Linux Mint 22.3, Python 3.10) restored to a clean snapshot, including the offline restore from the verified archive. [Record](tests/e2e/linux/2026-10-09--linux-scenario-run.md); passed again on 2026-10-11 after the Windows launcher change. [Record](tests/e2e/linux/2026-10-11--linux-scenario-run.md) |
 | Linux, arm64 | Not yet verified |
 | macOS | Not yet verified: no Apple hardware available |
-| Windows | Not yet verified: the Windows 11 virtual machine could not be reached. Unit tests cover the Windows launchers and zip assets |
+| Windows, amd64 | Scenario passed, not yet marked verified: the full end-to-end scenario passed on 2026-10-11, over SSH in a Windows 11 virtual machine restored to a clean snapshot (Python 3.15.0 from manage-python), including the offline restore inside a network cut. The cut's IPv6 internet path could not be tested on this network, so its self-test is to be repeated on a network with IPv6 before Windows is marked verified. [Record](tests/e2e/windows/2026-10-11--windows-test-run.md) |
 
 The version stays below 1.0.0 until every platform is verified (uc-automa 0011).
 

@@ -113,7 +113,7 @@ platforms:
     arch:
       AMD64: "amd64"
       x86_64: "amd64"
-    status: "not yet verified: the Windows 11 virtual machine could not be reached"
+    status: "end-to-end scenario passed on amd64, 2026-10-11; not yet marked verified until the network cut's self-test is repeated on a network with IPv6"
 
 install_root:
   linux: "~/.local/share/osat/restic"
