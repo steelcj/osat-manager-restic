@@ -1,7 +1,7 @@
 """Cutting an Incus instance off the network, except the host's SSH.
 
 For the end-to-end scenario's offline step on a machine reached over
-SSH, such as the Windows virtual machine. A network ACL, named uniquely
+SSH, such as a Windows virtual machine. A network ACL, named uniquely
 for each run, allows TCP from the host to the instance's port 22 and its
 replies, and nothing else. The instance's NIC rejects all other traffic
 in both directions. The ACL is applied as an instance-level override of
@@ -34,21 +34,21 @@ Every self-test run reports the IPv6 internet path as "verified",
 host"; it never passes silently. Repeat the self-test on a network with
 IPv6 before marking Windows verified.
 
-What the self-test established on the development host, 2026-10-09:
+What the self-test established on its first host, 2026-10-09:
 
 - The cut drops rather than rejects: Incus accepts reject, but denied
   traffic times out, so every probe has a short explicit timeout.
 - Incus exempts the bridge's DNS from ACLs. During the cut the instance
   can still query the host's resolver, which forwards DNS queries to the
-  internet; nothing else on the host is reachable, and the host's ports
-  80 and 443, Incus proxy devices for another instance, never relay.
+  internet; nothing else on the host is reachable, and no other host
+  service relays to the internet.
 - The host has no IPv6 route to the internet, so direct HTTPS over IPv6
   cannot be shown to work before the cut, and is reported as not
   provable; the IPv6 cut is proven by probes to the host over IPv6.
 
-    python3 tests/incus_acl.py selftest mint223 --snapshot clean
-    python3 tests/incus_acl.py killtest mint223 --snapshot clean
-    python3 tests/incus_acl.py recover mint223
+    python3 tests/incus_acl.py selftest <container> --snapshot <clean-snapshot>
+    python3 tests/incus_acl.py killtest <container> --snapshot <clean-snapshot>
+    python3 tests/incus_acl.py recover <container>
 """
 
 import argparse

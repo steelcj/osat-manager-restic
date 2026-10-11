@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "manage-restic: user-space installations of restic, side by side, verified against restic's signed checksums and kept for offline restore."
 readme = "README.md"
 requires-python = ">=3.8"
-license = { text = "GPL-3.0-or-later" }
+license = { text = "MIT" }
 authors = [{ name = "Christopher Steel" }]
 dependencies = []
 

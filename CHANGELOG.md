@@ -12,3 +12,4 @@ All notable changes are recorded here, in the form of [Keep a Changelog](https:/
 - Two-step verification of every download: the OpenPGP signature on `SHA256SUMS` against restic's pinned key, verified with the standard library, then the SHA-256 of the download.
 - `manager.yaml`, describing restic's releases, verification, platforms and locations.
 - Unit tests against signed fake releases, and the end-to-end scenario with its Linux driver.
+- Licensed MIT for code and CC BY 4.0 for documentation (uc-automa 0025).

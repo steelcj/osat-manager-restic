@@ -10,7 +10,7 @@ dc:type: "Text"
 dc:format: "text/markdown"
 dc:identifier: "urn:uuid:3008c6f3-b5b2-44a3-9b2d-936d0de5d35a"
 dc:language: "en-CA"
-dc:rights: "CC-BY-SA-4.0"
+dc:rights: "CC-BY-4.0"
 sat:version: "0.1.0"
 sat:status: "Accepted"
 ---
@@ -106,4 +106,4 @@ restic's own configuration, cache, repositories and password files. Do not run `
 
 ## License
 
-This document, *Using manage-restic*, by **Christopher Steel**, with AI assistance from **Claude Opus 5.5 (Anthropic)**, is licensed under the [Creative Commons Attribution-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-sa/4.0/).
+This document, *Using manage-restic*, by **Christopher Steel**, with AI assistance from **Claude Opus 5.5 (Anthropic)**, is licensed under the [Creative Commons Attribution 4.0 International License](https://creativecommons.org/licenses/by/4.0/).

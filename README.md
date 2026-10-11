@@ -35,13 +35,13 @@ The version stays below 1.0.0 until every platform is verified (uc-automa 0011).
 
 ```sh
 python3 -m unittest discover -s tests/unit
-python3 tests/e2e/linux/run_in_incus.py --instance mint223 --snapshot clean
+python3 tests/e2e/linux/run_in_incus.py --instance <container> --snapshot <clean-snapshot>
 ```
 
 The unit tests run offline, against fake releases signed with a test key in `tests/unit/data/`; `OSAT_INSTALL_TESTS=1` adds a wheel install test. The end-to-end driver runs `tests/e2e_scenario.py` as an ordinary user in an Incus container, with real downloads, and writes a record beside itself.
 
 ## License
 
-osat-manager-restic follows the REUSE convention: [`REUSE.toml`](REUSE.toml) records which licence covers which paths, and [`LICENSES/`](LICENSES/) holds their texts. Code is licensed under the GNU General Public License v3.0 or later, also in [`LICENSE`](LICENSE). Documentation is licensed under the Creative Commons Attribution-ShareAlike 4.0 International License. restic's release signature, kept as test data, is restic's, under the BSD 2-Clause License.
+osat-manager-restic follows the REUSE convention: [`REUSE.toml`](REUSE.toml) records which licence covers which paths, and [`LICENSES/`](LICENSES/) holds their texts. Code is licensed under the MIT License, also in [`LICENSE`](LICENSE). Documentation is licensed under the Creative Commons Attribution 4.0 International License. Releases are MIT and CC BY 4.0 from 0.1.0, the first public release (uc-automa 0025). restic's release signature, kept as test data, is restic's, under the BSD 2-Clause License.
 
-This document, *osat-manager-restic*, by **Christopher Steel**, with AI assistance from **Claude Opus 5.5 (Anthropic)**, is licensed under the [Creative Commons Attribution-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-sa/4.0/).
+This document, *osat-manager-restic*, by **Christopher Steel**, with AI assistance from **Claude Opus 5.5 (Anthropic)**, is licensed under the [Creative Commons Attribution 4.0 International License](https://creativecommons.org/licenses/by/4.0/).

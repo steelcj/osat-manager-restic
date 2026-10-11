@@ -8,7 +8,7 @@ container is deleted afterwards. A record of the run is written beside
 this file.
 
     python3 tests/e2e/linux/run_in_incus.py [--image debian/12]
-    python3 tests/e2e/linux/run_in_incus.py --instance mint223 --snapshot clean
+    python3 tests/e2e/linux/run_in_incus.py --instance <container> --snapshot <clean-snapshot>
 
 With --instance, an existing container is restored to a clean snapshot
 before the run and restored to it again afterwards, instead of launching

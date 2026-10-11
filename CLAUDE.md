@@ -9,7 +9,7 @@
 - Never weaken verification: a download is unpacked only after the signature and checksum both pass.
 - Run `python3 -m unittest discover -s tests/unit` and `uc-automa check` before committing.
 - A platform is verified only by running `tests/e2e_scenario.py` on it; never claim one that has not been run.
-- Ask before pushing, tagging, or using the Windows virtual machine.
+- Ask before pushing, tagging, or using any test machine.
 
 <!-- uc-portage:begin uc-automa-signpost -->
 ## uc-automa

@@ -1,23 +1,11 @@
 format: 1
 synced:
-  LICENSES/GPL-3.0-or-later.txt:
-    offering: license-gpl-3-0-or-later
-    source: files/LICENSES/GPL-3.0-or-later.txt
-    source_sha256: fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0
-    synced_at: '2026-10-10T00:19:40Z'
-    dest_sha256: fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0
   LICENSE:
-    offering: license-gpl-3-0-or-later
-    source: files/LICENSES/GPL-3.0-or-later.txt
-    source_sha256: fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0
-    synced_at: '2026-10-10T00:19:40Z'
-    dest_sha256: fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0
-  LICENSES/CC-BY-SA-4.0.txt:
-    offering: license-cc-by-sa-4-0
-    source: files/LICENSES/CC-BY-SA-4.0.txt
-    source_sha256: cde7883b9050a1104f4ac19a1572aafd6e5d7323b68351aaf51fbf4beba54966
-    synced_at: '2026-10-10T00:19:40Z'
-    dest_sha256: cde7883b9050a1104f4ac19a1572aafd6e5d7323b68351aaf51fbf4beba54966
+    offering: license-mit
+    source: files/LICENSES/MIT.txt
+    source_sha256: 87e9b7fb3f4b078b3f9814d7b6d5d8b2eb520ff44b7f42b58f75e5424d5137be
+    synced_at: '2026-10-11T13:22:17Z'
+    dest_sha256: 87e9b7fb3f4b078b3f9814d7b6d5d8b2eb520ff44b7f42b58f75e5424d5137be
   REUSE.toml:
     offering: reuse
     source: files/REUSE.toml
@@ -55,3 +43,15 @@ synced:
     source_sha256: 043dead84ab209e9586ffb57c6d8df55673c08a54a288f53e1c62c71c3a519c2
     synced_at: '2026-10-10T00:19:40Z'
     dest_sha256: 043dead84ab209e9586ffb57c6d8df55673c08a54a288f53e1c62c71c3a519c2
+  LICENSES/MIT.txt:
+    offering: license-mit
+    source: files/LICENSES/MIT.txt
+    source_sha256: 87e9b7fb3f4b078b3f9814d7b6d5d8b2eb520ff44b7f42b58f75e5424d5137be
+    synced_at: '2026-10-11T13:22:17Z'
+    dest_sha256: 87e9b7fb3f4b078b3f9814d7b6d5d8b2eb520ff44b7f42b58f75e5424d5137be
+  LICENSES/CC-BY-4.0.txt:
+    offering: license-cc-by-4-0
+    source: files/LICENSES/CC-BY-4.0.txt
+    source_sha256: d557539df68e771cc1eedcc91d13f70fca930e508d11eedcafa4b15db49e3744
+    synced_at: '2026-10-11T13:22:17Z'
+    dest_sha256: d557539df68e771cc1eedcc91d13f70fca930e508d11eedcafa4b15db49e3744
