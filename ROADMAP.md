@@ -14,7 +14,8 @@ Findings of the third independent review of the OpenPGP verifier, none a violati
 
 ## Next release
 
-- Verify end to end on Windows, once the Windows 11 virtual machine can be reached, and on Linux arm64.
+- Repeat the network cut's self-test on a network with an IPv6 route, then mark Windows verified; the end-to-end scenario passed on Windows on 2026-10-11, on a network where the IPv6 internet path could not be tested.
+- Verify end to end on Linux arm64.
 - Verify end to end on macOS, on Apple hardware.
 
 ## Later

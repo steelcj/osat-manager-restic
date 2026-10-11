@@ -315,16 +315,20 @@ class Manager:
         if path.exists() and self.owns(path):
             path.unlink()
 
-    def launcher_text(self, command: List[str], env: Optional[Dict[str, str]] = None) -> str:
-        env = env or {}
+    def launcher_text(self, command: List[str]) -> str:
         if self.paths.windows:
-            lines = ["@echo off", f"rem {MARKER}; do not edit.", "setlocal"]
-            lines += [f'set "{k}={v}"' for k, v in env.items()]
-            lines.append(" ".join(f'"{c}"' for c in command) + " %*")
+            # cmd.exe reads a batch file a line at a time and goes back to
+            # it after each command, so a launcher deleted while it runs,
+            # as manage-restic's is by --uninstall, fails afterwards.
+            # (goto) ends the batch file once its line has been read, and
+            # the command then runs as the line's last, passing its exit
+            # code back; % is doubled so a path cannot expand a variable.
+            quoted = " ".join('"' + c.replace("%", "%%") + '"' for c in command)
+            lines = ["@echo off", f"rem {MARKER}; do not edit.",
+                     f"(goto) 2>nul & {quoted} %*"]
             return "\r\n".join(lines) + "\r\n"
-        lines = ["#!/bin/sh", f"# {MARKER}; do not edit."]
-        lines += [f"{k}='{v}'; export {k}" for k, v in env.items()]
-        lines.append("exec " + " ".join(f"'{c}'" for c in command) + ' "$@"')
+        lines = ["#!/bin/sh", f"# {MARKER}; do not edit.",
+                 "exec " + " ".join(f"'{c}'" for c in command) + ' "$@"']
         return "\n".join(lines) + "\n"
 
     def write_launcher(self, name: str, text: str) -> None:
@@ -399,12 +403,16 @@ class Manager:
         (target / "data").mkdir(exist_ok=True)
         shutil.copyfile(manifest_file, target / "data" / "manager.yaml")
         (target / "VERSION").write_text(__version__ + "\n", encoding="utf-8")
+        # Python runs a directory by its __main__.py, with the directory
+        # first on the import path, so the launcher sets no variables.
+        (self.paths.manager / "__main__.py").write_text(
+            "import runpy\n\nrunpy.run_module(%r, run_name=\"__main__\", "
+            "alter_sys=True)\n" % package.name, encoding="utf-8")
         state = self.read_state()
         slots = state.setdefault("aliases", {})
         slots.setdefault(SELF, self.manifest["tool"]["command"])
         self.write_launcher(slots[SELF], self.launcher_text(
-            [sys.executable, "-m", package.name],
-            {"PYTHONPATH": str(self.paths.manager)}))
+            [sys.executable, str(self.paths.manager)]))
         self.write_state(state)
         protect(self.paths.manager)
         self.log(f"[manage-restic] installed manage-restic {__version__} "

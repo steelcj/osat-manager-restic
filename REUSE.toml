@@ -6,7 +6,7 @@ SPDX-FileCopyrightText = "Christopher Steel"
 SPDX-License-Identifier = "MIT"
 
 [[annotations]]
-path = ["en-ca/**", "tests/e2e/linux/*.md", "README.md", "CHANGELOG.md", "ROADMAP.md", "CONTRIBUTING.md", "CLAUDE.md"]
+path = ["en-ca/**", "tests/e2e/linux/*.md", "tests/e2e/windows/*.md", "README.md", "CHANGELOG.md", "ROADMAP.md", "CONTRIBUTING.md", "CLAUDE.md"]
 SPDX-FileCopyrightText = "Christopher Steel"
 SPDX-License-Identifier = "CC-BY-4.0"
 

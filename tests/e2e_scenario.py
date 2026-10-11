@@ -153,7 +153,10 @@ def step_remove():
 
 
 def step_restore_offline():
-    probe = subprocess.run([sys.executable, "-c",
+    # -B: the probe fails with a traceback, and Python caches the modules
+    # that prints with inside its own installation, which on Windows is in
+    # the account being compared.
+    probe = subprocess.run([sys.executable, "-B", "-c",
                             "import urllib.request;urllib.request.urlopen("
                             "'https://github.com', timeout=10)"],
                            capture_output=True)

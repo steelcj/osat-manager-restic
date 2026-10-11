@@ -252,6 +252,40 @@ class SelfInstallAndUninstall(Sandbox):
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertIn("manage-restic", out.stdout)
 
+    @unittest.skipUnless(POSIX, "runs the launcher with /bin/sh")
+    def test_the_manager_uninstalls_itself_through_its_launcher(self):
+        uninstall_through_launcher(self)
+
+
+def uninstall_through_launcher(case):
+    """Run the self-installed manager's own launcher, which uninstall
+    deletes while it runs: an error passes its exit code through, and
+    uninstall succeeds cleanly."""
+    case.manager.install("0.19.1")
+    case.manager.self_install(REPO / "manager.yaml")
+    env = dict(os.environ, OSAT_RESTIC_HOME=str(case.paths.root),
+               OSAT_BIN_DIR=str(case.paths.bin_dir))
+    launcher = str(case.paths.launcher("manage-restic"))
+    failed = subprocess.run([launcher, "--switch", "9.9.9"], cwd=str(case.tmp),
+                            env=env, capture_output=True, text=True)
+    case.assertEqual(failed.returncode, 1, failed.stdout + failed.stderr)
+    case.assertIn("[manage-restic ERROR]", failed.stderr)
+    out = subprocess.run([launcher, "--uninstall", "--yes"], cwd=str(case.tmp),
+                         env=env, capture_output=True, text=True)
+    case.assertEqual((out.returncode, out.stderr), (0, ""), out.stdout)
+    case.assertFalse(case.paths.root.exists())
+    case.assertFalse(case.paths.bin_dir.exists())
+
+
+class Bytecode(unittest.TestCase):
+
+    def test_the_manager_writes_no_bytecode_cache(self):
+        out = subprocess.run([sys.executable, "-c", "import osat_manager_restic, sys; "
+                              "print(sys.dont_write_bytecode)"],
+                             env=dict(os.environ, PYTHONPATH=str(REPO / "lib")),
+                             capture_output=True, text=True)
+        self.assertEqual(out.stdout.strip(), "True", out.stderr)
+
 
 class Windows(Sandbox):
     system = "windows"
@@ -263,7 +297,17 @@ class Windows(Sandbox):
         self.assertEqual(launcher.suffix, ".cmd")
         text = launcher.read_bytes()
         self.assertIn(b"\r\n", text)
-        self.assertIn(b"%*", text)
+        self.assertTrue(text.endswith(b' %*\r\n'))
+        self.assertIn(b"\r\n(goto) 2>nul & \"", text,
+                      "the command runs on the line that ends the batch file")
+
+    def test_a_percent_sign_in_a_path_is_not_expanded(self):
+        text = self.manager.launcher_text([r"C:\100%done\restic.exe"])
+        self.assertIn(r'"C:\100%%done\restic.exe" %*', text)
+
+    @unittest.skipIf(POSIX, "runs the launcher with cmd.exe")
+    def test_the_manager_uninstalls_itself_through_its_launcher(self):
+        uninstall_through_launcher(self)
 
 
 if __name__ == "__main__":

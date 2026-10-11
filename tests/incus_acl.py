@@ -46,6 +46,11 @@ What the self-test established on its first host, 2026-10-09:
   cannot be shown to work before the cut, and is reported as not
   provable; the IPv6 cut is proven by probes to the host over IPv6.
 
+The self-test reaches the instance through a guest: a Linux container
+with incus exec by default, or a Windows virtual machine over SSH, as
+tests/e2e/windows/run_over_ssh.py supplies. The kill test exercises only
+the host's side, and runs in a Linux container.
+
     python3 tests/incus_acl.py selftest <container> --snapshot <clean-snapshot>
     python3 tests/incus_acl.py killtest <container> --snapshot <clean-snapshot>
     python3 tests/incus_acl.py recover <container>
@@ -355,6 +360,38 @@ def run_probe(instance, code, *args):
     return (result.stdout or result.stderr).strip() or "FAILED (no output)"
 
 
+class ExecGuest:
+    """A Linux container reached with incus exec. The self-test reaches
+    its instance only through a guest, so another kind, such as a Windows
+    virtual machine reached over SSH, can supply its own: prepare() brings
+    the instance online with an SSH server and returns the address the
+    host's SSH monitor watches, proxies() reports any proxy configured
+    inside it, and run() and run_many() run probes inside it. A guest
+    must raise, never return a FAILED probe, when it cannot reach the
+    instance at all, so a broken channel is not mistaken for a cut."""
+
+    def __init__(self, instance):
+        self.instance = instance
+
+    def prepare(self) -> str:
+        address = wait_for_network(self.instance, self)
+        ensure_sshd(self.instance)
+        return address
+
+    def proxies(self) -> str:
+        return incus("exec", self.instance, "--", "sh", "-c",
+                     "env | grep -i _proxy; grep -i proxy /etc/environment "
+                     "/etc/apt/apt.conf /etc/apt/apt.conf.d/* 2>/dev/null",
+                     check=False).stdout.strip()
+
+    def run(self, code, *args) -> str:
+        return run_probe(self.instance, code, *args)
+
+    def run_many(self, probes) -> list:
+        """probes is a list of (code, args); returns their outputs in order."""
+        return [self.run(code, *args) for code, args in probes]
+
+
 def ssh_banner(address: str) -> bool:
     try:
         with socket.create_connection((address, 22), timeout=PROBE_TIMEOUT) as s:
@@ -379,15 +416,16 @@ class SshMonitor(threading.Thread):
             self.stopping.wait(1)
 
 
-def wait_for_network(instance: str) -> str:
+def wait_for_network(instance: str, guest=None) -> str:
     """Wait until the instance has both its IPv4 and a global IPv6
     address and reaches restic's release URL; return its IPv4 address."""
+    guest = guest or ExecGuest(instance)
     for _ in range(90):
         state = query(f"/1.0/instances/{instance}/state")
         addresses = (state.get("network") or {}).get("eth0", {}).get("addresses", [])
         v4 = [a["address"] for a in addresses if a["family"] == "inet"]
         v6 = [a for a in addresses if a["family"] == "inet6" and a["scope"] == "global"]
-        if v4 and v6 and run_probe(instance, HTTPS_PROBE, RELEASE_URL).startswith("OK"):
+        if v4 and v6 and guest.run(HTTPS_PROBE, RELEASE_URL).startswith("OK"):
             return v4[0]
         time.sleep(2)
     raise RuntimeError(f"{instance} did not come up with IPv4, IPv6 and HTTPS")
@@ -439,8 +477,9 @@ def paired_probes(host4, host6):
     return probes
 
 
-def selftest(instance: str, snapshot: str) -> int:
+def selftest(instance: str, snapshot: str, guest=None) -> int:
     results, notes = [], []
+    guest = guest or ExecGuest(instance)
 
     def record(label, ok, detail=""):
         results.append(ok)
@@ -452,20 +491,16 @@ def selftest(instance: str, snapshot: str) -> int:
     name = None
     try:
         incus("start", instance)
-        address = wait_for_network(instance)
-        ensure_sshd(instance)
-        proxies = incus("exec", instance, "--", "sh", "-c",
-                        "env | grep -i _proxy; grep -i proxy /etc/environment "
-                        "/etc/apt/apt.conf /etc/apt/apt.conf.d/* 2>/dev/null",
-                        check=False).stdout.strip()
+        address = guest.prepare()
+        proxies = guest.proxies()
         record("no proxy is configured in the instance", not proxies, proxies)
         before_config = instance_config(instance)
         host4, host6 = bridge_addresses(nic_network(instance, "eth0"))
         probes = paired_probes(host4, host6)
 
-        baseline = {}
-        for label, code, args in probes:
-            baseline[label] = run_probe(instance, code, *args)
+        labels = [label for label, _, _ in probes]
+        baseline = dict(zip(labels, guest.run_many(
+            [(code, args) for _, code, args in probes])))
         record("before: the host's SSH answers", ssh_banner(address))
 
         monitor = SshMonitor(address)
@@ -476,15 +511,16 @@ def selftest(instance: str, snapshot: str) -> int:
                    f"{deadman_remaining(cut.unit):.0f} s left, limit "
                    f"{cut.step_seconds} s")
             time.sleep(2)
-            during = {label: run_probe(instance, code, *args)
-                      for label, code, args in probes}
+            during = dict(zip(labels, guest.run_many(
+                [(code, args) for _, code, args in probes])))
             open_ports = {}
             for host in (h for h in (host4, host6) if h):
-                open_ports[host] = [p for p in HOST_TCP_PORTS if run_probe(
-                    instance, TCP_PROBE, host, p).startswith("OK")]
-                dns = run_probe(instance, DNS_PROBE, host)
-                notes.append(f"during the cut, DNS on the host {host}: {dns}")
-            negatives = [(label, (lambda c=code, a=args: run_probe(instance, c, *a)))
+                outputs = guest.run_many([(TCP_PROBE, (host, p)) for p in
+                                          HOST_TCP_PORTS] + [(DNS_PROBE, (host,))])
+                open_ports[host] = [p for p, out in zip(HOST_TCP_PORTS, outputs)
+                                    if out.startswith("OK")]
+                notes.append(f"during the cut, DNS on the host {host}: {outputs[-1]}")
+            negatives = [(label, (lambda c=code, a=args: guest.run(c, *a)))
                          for label, code, args in probes
                          if baseline[label].startswith("OK")]
             problems = reprove(cut, negatives)
@@ -493,8 +529,8 @@ def selftest(instance: str, snapshot: str) -> int:
                    "; ".join(problems))
             monitor.stopping.set()
             monitor.join()
-        after = {label: run_probe(instance, code, *args)
-                 for label, code, args in probes}
+        after = dict(zip(labels, guest.run_many(
+            [(code, args) for _, code, args in probes])))
         v6_label = "direct HTTPS over IPv6 to a public address, no proxy"
         status = ipv6_status(baseline[v6_label], during[v6_label], after[v6_label])
         print(f"IPV6  the IPv6 internet path: {status}", flush=True)

@@ -14,6 +14,8 @@ manage-restic --install
 restic version
 ```
 
+On Windows, in Command Prompt, the first line is `set PYTHONPATH=lib` followed by `python -m osat_manager_restic --self-install`.
+
 The launchers go to `~/.local/bin`, or `%LOCALAPPDATA%\osat\bin` on Windows, which must be on your `PATH`. [Using manage-restic](en-ca/docs/guides/usage/using-manage-restic-v0.1.0.md) explains every command.
 
 ## Verification
@@ -36,9 +38,10 @@ The version stays below 1.0.0 until every platform is verified (uc-automa 0011).
 ```sh
 python3 -m unittest discover -s tests/unit
 python3 tests/e2e/linux/run_in_incus.py --instance <container> --snapshot <clean-snapshot>
+python3 tests/e2e/windows/run_over_ssh.py --instance <vm> --snapshot <clean-snapshot> --ssh <host>
 ```
 
-The unit tests run offline, against fake releases signed with a test key in `tests/unit/data/`; `OSAT_INSTALL_TESTS=1` adds a wheel install test. The end-to-end driver runs `tests/e2e_scenario.py` as an ordinary user in an Incus container, with real downloads, and writes a record beside itself.
+The unit tests run offline, against fake releases signed with a test key in `tests/unit/data/`; `OSAT_INSTALL_TESTS=1` adds a wheel install test. The end-to-end drivers run `tests/e2e_scenario.py` as an ordinary user, with real downloads, in an Incus container on Linux and over SSH in an Incus virtual machine on Windows, and write a record beside themselves. The Windows driver also runs the unit tests of this repository, uc-portage and uc-automa, the network cut's self-test, and an install of uc-portage and uc-automa from wheels with `pip install --no-index` inside a network cut, with PyYAML built as pure Python.
 
 ## License
 
