@@ -4,7 +4,7 @@ All notable changes are recorded here, in the form of [Keep a Changelog](https:/
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-10-10
+## [0.1.0] - 2026-10-11
 
 ### Added
 
