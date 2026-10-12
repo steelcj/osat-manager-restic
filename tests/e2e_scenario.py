@@ -2,8 +2,9 @@
 
 Run inside the platform being verified, as an ordinary user, with real
 downloads from restic's release pages. A platform driver, such as
-tests/e2e/linux/run_in_incus.py, calls the steps in order and handles
-what the user cannot, such as disconnecting the network.
+uc-test-platform's Linux driver (uc-automa 0031), calls the steps in
+order and handles what the user cannot, such as disconnecting the
+network.
 
     python3 e2e_scenario.py STEP
 

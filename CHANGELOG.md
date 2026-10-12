@@ -10,13 +10,14 @@ All notable changes are recorded here, in the form of [Keep a Changelog](https:/
 
 ### Changed
 
+- The end-to-end drivers, for Linux and Windows, and the network cut moved to uc-test-platform (uc-automa 0031); `tests/e2e_scenario.py` and the run records stay here.
 - The manager's launcher sets no variables: `--self-install` writes a `__main__.py` into the manager's directory, and the launcher runs that directory.
 - The manager writes no bytecode cache, so a Python installed in the user's own account, as manage-python installs it, is left as it was.
 
 ### Added
 
 - The end-to-end scenario passed on Windows 11, amd64, on 2026-10-11; Windows is not yet marked verified, pending the network cut's self-test on a network with IPv6.
-- `tests/e2e/windows/run_over_ssh.py`, which runs the unit tests of uc-portage, uc-automa and this repository, the network cut's self-test and the end-to-end scenario in a Windows virtual machine reached over SSH, each from a clean snapshot, and installs uc-portage and uc-automa there with `pip install --no-index`, inside a network cut, from wheels built from their release tags and PyYAML's pure `py3-none-any` wheel.
+- A Windows driver, which runs the unit tests of uc-portage, uc-automa and this repository, the network cut's self-test and the end-to-end scenario in a Windows virtual machine reached over SSH, each from a clean snapshot, and installs uc-portage and uc-automa there with `pip install --no-index`, inside a network cut, from wheels built from their release tags and PyYAML's pure `py3-none-any` wheel.
 - The network cut's self-test reaches its instance through a guest, so the same test runs in a Linux container with `incus exec` and in a Windows virtual machine over SSH.
 
 ## [0.1.0] - 2026-10-11
