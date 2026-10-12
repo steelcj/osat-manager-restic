@@ -10,7 +10,7 @@ All notable changes are recorded here, in the form of [Keep a Changelog](https:/
 
 ### Changed
 
-- The end-to-end drivers, for Linux and Windows, and the network cut moved to uc-test-platform (uc-automa 0031); `tests/e2e_scenario.py` and the run records stay here.
+- The end-to-end drivers, for Linux and Windows, and the network cut moved to uc-test-platform (uc-automa 0031); `tests/e2e_scenario.py` and the run records stay here. The README's Develop section installs uc-test-platform from a checkout beside this one.
 - The manager's launcher sets no variables: `--self-install` writes a `__main__.py` into the manager's directory, and the launcher runs that directory.
 - The manager writes no bytecode cache, so a Python installed in the user's own account, as manage-python installs it, is left as it was.
 

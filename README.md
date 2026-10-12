@@ -41,7 +41,19 @@ python3 -m unittest discover -s tests/unit
 
 The unit tests run offline, against fake releases signed with a test key in `tests/unit/data/`; `OSAT_INSTALL_TESTS=1` adds a wheel install test.
 
-The end-to-end drivers and the network cut live in uc-test-platform (uc-automa 0031), a checkout beside this one, with uc-portage's and uc-automa's:
+The end-to-end drivers and the network cut live in uc-test-platform (uc-automa 0031). They run on the Linux host that holds the Incus instances. Install uc-test-platform from a checkout beside this one, in its own virtual environment; the Windows driver also takes uc-portage and uc-automa from checkouts beside this one:
+
+```sh
+git clone https://github.com/steelcj/uc-test-platform ../uc-test-platform
+python -m venv ../uc-test-platform/.venv
+../uc-test-platform/.venv/bin/python -m pip install -e ../uc-test-platform
+. ../uc-test-platform/.venv/bin/activate
+uc-test-platform --version
+```
+
+`python` is the command manage-python installs. With another Python, use its own command instead, such as `python3`. On Debian and Ubuntu the system Python's `venv` module needs the `python3-venv` package first: `sudo apt install python3-venv`. Until uc-test-platform's first release, after uc-automa 0.2.0, a run record names the uc-test-platform commit it used.
+
+Then, with that environment active:
 
 ```sh
 uc-test-platform linux --repository . --instance <container> --snapshot <clean-snapshot>
